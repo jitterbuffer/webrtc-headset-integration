@@ -89,27 +89,64 @@ function ringHeadset (startRinging, offer) {
 }
 
 function connectToHeadset(onOpenFcn){
-//todo make this dyamic to adjust to SSL
-	var uri = 'ws://localhost:8888/plantronics';
-	plantronicsSocket = new WebSocket(uri);
-	plantronicsSocket.onopen = function (evt) {
-	    console.log("connected to Plantronics headset service");
-	    if(onOpenFcn){
-	    	    onOpenFcn();
-	    }
-	    queryHeadsetSettings();
-	};
-	plantronicsSocket.onclose = function (evt) {
-	    console.log("Plantronics headset service connection closed");
-	};
-	plantronicsSocket.onmessage = function (evt) {
-	    var pltMessage = JSON.parse(evt.data);
-	    processPLTMessage(pltMessage);
-	};
-	plantronicsSocket.onerror = function (evt) {
-	    console.log("error connecting to headset service");
-	    plantronicsSocket = null;
-	};
+////todo make this dyamic to adjust to SSL
+//	var uri = 'ws://localhost:8888/plantronics';
+//	plantronicsSocket = new WebSocket(uri);
+//	plantronicsSocket.onopen = function (evt) {
+//	    console.log("connected to Plantronics headset service");
+//	    if(onOpenFcn){
+//	    	    onOpenFcn();
+//	    }
+//	    queryHeadsetSettings();
+//	};
+//	plantronicsSocket.onclose = function (evt) {
+//	    console.log("Plantronics headset service connection closed");
+//	};
+//	plantronicsSocket.onmessage = function (evt) {
+//	    var pltMessage = JSON.parse(evt.data);
+//	    processPLTMessage(pltMessage);
+//	};
+//	plantronicsSocket.onerror = function (evt) {
+//	    console.log("error connecting to headset service");
+//	    plantronicsSocket = null;
+   //	};
+   //yes means you are registering, no means no
+   var yes = true;
+   if (yes) {
+      spokes.Plugin.register(plugin_name, function (result) {
+        // fillStatus(result, false, "Register Plugin");
+         //check to make sure plugin is active, otherwise no call control
+         if (result.isError && result.Err.Description !== "Plugin exists")
+            return;
+         spokes.Plugin.isActive(myplugin, true, function (result) {
+           // fillStatus(result, false, "Is Active");
+            if (result.isError)
+               return;
+		   console.log("connected to Plantronics headset service");
+				if(onOpenFcn){
+					onOpenFcn();
+				}
+            //you must set client as default plugin to receive device dialed call requests
+            spokes.UserPreference.setDefaultSoftphone(plugin_name, function (result) {
+              // fillStatus(result, false, "Default Plugin")
+               if (result.isError)
+                  return;
+               //all is well, move to IDLE state
+               softphone_state(SessionCallState.CallIdle);
+            });
+         });
+      });
+      //Get device info (verifying attached device) and display in UI
+      spokes.Device.deviceInfo(function (result) {
+        // fillStatus(result, false, "GetDeviceInfo")
+         if (result.isError) {
+            alert("No Supported Device Connected.  Please attach a supported device and re-register");
+            return;
+         }
+         displayDeviceInfo(result);
+      });
+
+   }
 }
 
 function getPlantronicsHeadset(){
