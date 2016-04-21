@@ -143,7 +143,7 @@ function connectToHeadset(onOpenFcn){
             alert("No Supported Device Connected.  Please attach a supported device and re-register");
             return;
          }
-         displayDeviceInfo(result);
+         //displayDeviceInfo(result);
       });
 
    }
