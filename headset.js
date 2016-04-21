@@ -59,6 +59,9 @@ var COMMAND_UNMUTE_HEADSET = {
 plantronicsSocket = null;
 plantronicsHeadset = null;
 
+var spokes = new Spokes("https://127.0.0.1:32018/Spokes");
+var plugin_name = "Micollab";
+
 function muteHeadset (isMuted) {
   if(!plantronicsSocket){
 	  return;
