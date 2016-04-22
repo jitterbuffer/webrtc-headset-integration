@@ -77,18 +77,49 @@ function muteHeadset (isMuted) {
 }
 
 function ringHeadset (startRinging, offer) {
-  if(!plantronicsSocket || !offer){
+  if(!offer){
    return;
   }
-  if(startRinging){
-	  console.log("ringing headset");
-	  COMMAND_RING_HEADSET.payload.offer = offer;
-	  plantronicsSocket.send(JSON.stringify(COMMAND_RING_HEADSET));
-  } else{
-	  console.log("stopped ringing headset");
-	  COMMAND_STOP_RINGING_HEADSET.payload.offer = offer.from;
-	  plantronicsSocket.send(JSON.stringify(COMMAND_STOP_RINGING_HEADSET));
-  }
+  // if(startRinging){
+	  // console.log("ringing headset");
+	  // COMMAND_RING_HEADSET.payload.offer = offer;
+	  // plantronicsSocket.send(JSON.stringify(COMMAND_RING_HEADSET));
+  // } else{
+	  // console.log("stopped ringing headset");
+	  // COMMAND_STOP_RINGING_HEADSET.payload.offer = offer.from;
+	  // plantronicsSocket.send(JSON.stringify(COMMAND_STOP_RINGING_HEADSET));
+  // }
+  
+  //if (sfstate === "TIDLE") {
+	  // Tell headset to ring
+	  if(startRinging){
+        //create call ID and contact info for incoming call
+		console.log("ringing headset");
+        currentCallID = new SpokesCallId({ Id: "1" });
+        name = offer.from;;
+        male = false;
+        //send incoming call information to Hub
+        spokes.Plugin.incomingCall(plugin_name, currentCallID, new SpokesContact({ Name: name }), "Unknown", "ToHeadset", function (result) {
+            //fillStatus(result, false, "incomingCall");
+			 if (result.isError)
+			 {
+				 console.log("Error in ringing headset");
+			 }
+        })
+	  }
+	  else
+	  {
+		  // Tell headset the incoming call is answered
+		  console.log("call answered");
+		  current = new SpokesCallId({ Id: "1" });
+		  spokes.Plugin.answerCall(plugin_name, currentCallID, function (result) {
+           if (result.isError)
+			 {
+				 console.log("Error in telling headset to stop ringing");
+			 }
+        });
+	  }
+    //}
 }
 
 function connectToHeadset(onOpenFcn){
@@ -121,7 +152,7 @@ function connectToHeadset(onOpenFcn){
          //check to make sure plugin is active, otherwise no call control
          if (result.isError && result.Err.Description !== "Plugin exists")
             return;
-         spokes.Plugin.isActive(myplugin, true, function (result) {
+         spokes.Plugin.isActive(plugin_name, true, function (result) {
            // fillStatus(result, false, "Is Active");
             if (result.isError)
                return;
@@ -135,7 +166,7 @@ function connectToHeadset(onOpenFcn){
                if (result.isError)
                   return;
                //all is well, move to IDLE state
-               softphone_state(SessionCallState.CallIdle);
+//softphone_state(SessionCallState.CallIdle);
             });
          });
       });
@@ -150,6 +181,82 @@ function connectToHeadset(onOpenFcn){
       });
 
    }
+}
+
+function softphone_state(event) {
+    switch (event) {
+        // case INIT_STATE:
+            // sfstate = "TINIT";
+      // //      handleUIDisplay("init");
+            // break;
+        case SessionCallState.CallIdle:
+            //put your call idle handler here
+            sfstate = "TIDLE";
+     //       handleUIDisplay("clearpad");
+    //        handleUIDisplay("unmute");
+     //       handleUIDisplay("resume");
+            break;
+        case SessionCallState.CallEnded:
+            //put your end call handler here
+            sfstate = "TIDLE";
+      //      handleUIAudio("stop");
+            break;
+        case SessionCallState.CallRinging:
+            //put your call ringing handler here
+            sfstate = "TRING";
+      //      handleUIAudio("ringtone");
+            break;
+        case CALL_REQUEST:
+            //put your call request handler here
+            sfstate = "TDCALL";
+          //  handleUIAudio("ringtone");
+            break;
+        case SessionCallState.RejectCall:
+            //put your reject call handler here
+            sfstate = "TIDLE";
+          //  reject_call_function();
+          //  handleUIAudio("stop");
+            break;
+        case SessionCallState.CallInProgress:
+            //put your call in progress handler here
+            sfstate = "TACTIVE";
+            //handleUIAudio("play");
+            break;
+        case SessionCallState.AcceptCall:
+            //put your accept call handler here
+            sfstate = "TACTIVE";
+          //  handleUIAudio("play");
+            break;
+        case SessionCallState.HoldCall:
+            //put your hold call handler here
+            sfstate = "THOLD";
+          //  handleUIDisplay("hold");
+          //  handleUIAudio("stop");
+            break;
+        case SessionCallState.Resumecall:
+            //put your resume call handler here
+            sfstate = "TACTIVE";
+            handleUIDisplay("resume");
+        //    handleUIAudio("play");
+            break;
+        case SessionCallState.MuteON:
+            //put your mute handler here
+      //      handleUIDisplay("mute");
+            break;
+        case SessionCallState.MuteOFF:
+            //put your unmute handler here
+    //        handleUIDisplay("unmute");
+            break;
+        case SessionCallState.TerminateCall:
+            //put your terminate call handler here
+            sfstate = "TIDLE";
+  //          handleUIAudio("stop");
+            break;
+        default:
+            break;
+    }
+    //update the UI state
+//    highlight(sfstate);
 }
 
 function getPlantronicsHeadset(){
