@@ -9,6 +9,7 @@ if (!console || !console.log) {
 var peerc;
 var source = new EventSource("events");
 var peerUser;
+var offer_global;
 
 var constraints = {
    mandatory: {
@@ -82,14 +83,15 @@ source.addEventListener("userleft", function(e) {
 
 source.addEventListener("offer", function(e) {
   var offer = JSON.parse(e.data);
-  //TODO - CAB is this the right spot?
-  //ringHeadset(true, offer);
+   //TODO - CAB is this the right spot?
+  offer_global = offer;
+  ringHeadset(true, offer);
   document.getElementById("incomingPic").src = "img/" + offer.from.toLowerCase() + ".png";
   document.getElementById("incomingUser").innerHTML = offer.from;
   document.getElementById("incomingAccept").onclick = function() {
     $("#incomingCall").modal("hide");
     //call is being answered via a button click tell the headset to stop ringing
-  //  ringHeadset(false, offer);
+    ringHeadset(false, offer);
     acceptCall(offer);
   };
   $("#incomingCall").modal();
@@ -357,6 +359,7 @@ function initiateCall(user) {
 function endCall(params) {
   var remoteTermRequest = false;
   var termFromHeadset = false;
+  sdp_sent = false;
   log("Ending call");
   if(params) {
     if(params.remoteTerm == true)
