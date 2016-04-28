@@ -55,12 +55,36 @@ var COMMAND_UNMUTE_HEADSET = {
 	    type:"command",
 	    id:"0X0D0B"};
 
+var sfstate = "TINIT";
+
 //one more global .. sorry BOM
 plantronicsSocket = null;
 plantronicsHeadset = null;
 
+CALL_REQUEST = 102;
+INIT_STATE = 103;
+
 var spokes = new Spokes("https://127.0.0.1:32018/Spokes");
 var plugin_name = "Micollab";
+
+
+//Polling function, called every second to update the event lists
+setInterval(function () {
+   if (sfstate !== "TINIT") {
+      //Show on UI that polling is happening
+      //     displayPolling();
+
+      //get events generated from the device
+      spokes.Plugin.callEvents(plugin_name, function (result) {
+         parsePLTMessage(result, true, "CallEvents");
+      });
+      //get any requests for calls from the device
+      spokes.Plugin.callRequests(plugin_name, function (result) {
+         parsePLTMessage(result, true, "CallRequest");
+      });
+   }
+}
+    , 1000); //1 second on the callback
 
 function muteHeadset (isMuted) {
   if(!plantronicsSocket){
@@ -166,7 +190,7 @@ function connectToHeadset(onOpenFcn){
                if (result.isError)
                   return;
                //all is well, move to IDLE state
-//softphone_state(SessionCallState.CallIdle);
+            softphone_state(SessionCallState.CallIdle);
             });
          });
       });
@@ -224,8 +248,10 @@ function softphone_state(event) {
             break;
         case SessionCallState.AcceptCall:
             //put your accept call handler here
-            sfstate = "TACTIVE";
-          //  handleUIAudio("play");
+           sfstate = "TACTIVE";
+            $("#incomingCall").modal("hide");
+            ringHeadset(false, offer_global);
+            acceptCall(offer_global);
             break;
         case SessionCallState.HoldCall:
             //put your hold call handler here
@@ -249,7 +275,12 @@ function softphone_state(event) {
             break;
         case SessionCallState.TerminateCall:
             //put your terminate call handler here
-            sfstate = "TIDLE";
+           sfstate = "TIDLE";
+           var params = {
+              fromHeadset: true,
+              remoteTerm: false
+           };
+           endCall(params);
   //          handleUIAudio("stop");
             break;
         default:
@@ -277,6 +308,37 @@ function queryHeadsetOwner() {
   }
   plantronicsSocket.send(JSON.stringify(SETTING_USERNAME));
 }
+
+function parsePLTMessage(result, toJson, funcName) {
+      //This is a handler for command results
+      if (result.isError != null && result.isError) {
+         //displayError(result);
+      }
+      else if (toJson) { //the result of the command is an object and needs to be stringified
+         if (result.Result.length === 'undefined' || result.Result.length === null)
+            thelen = 0;
+         else thelen = result.Result.length;
+         if (thelen > 0) {
+            //display the event on UI
+            //displayJSON(result);
+            //send events to the event handler, parsing them by action
+            for (i = 0; i < thelen; i++) {
+               if (funcName === "CallEvents")
+                  myresult = result.Result[i].Action;
+               else
+                  if (funcName === "CallRequest") {
+                     myresult = CALL_REQUEST;
+                     male = false;
+                   //  dialNumber("Sally Request", result.Result[i].Phone)
+                  }
+               softphone_state(myresult);//the event handler
+            }
+         }
+      }
+      else { //This is a command that returns a boolean
+        // displayCommandResult(funcName, result)
+      }
+   }
 
 function processPLTMessage(msg) {
 	//Process message from context server. If relevant to RTC server, call applicable methods.
