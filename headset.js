@@ -59,27 +59,90 @@ var COMMAND_UNMUTE_HEADSET = {
 plantronicsSocket = null;
 plantronicsHeadset = null;
 
+//added events for this demo program's UI
+CALL_REQUEST = 102;
+INIT_STATE = 103;
+
 var spokes = new Spokes("https://127.0.0.1:32018/Spokes");
 var plugin_name = "Micollab";
+var sfstate = "TINIT";
+var regtoggle;
+var mutetoggle;
+var holdtoggle;
+
+
+//Polling function, called every second to update the event lists
+setInterval(function () {
+	
+   if (sfstate !== "TINIT") {
+      //Show on UI that polling is happening
+      //displayPolling();
+
+      //get events generated from the device
+      spokes.Plugin.callEvents(plugin_name, function (result) {
+         parsePLTMessage(result, true, "CallEvents");
+      });
+      //get any requests for calls from the device
+      spokes.Plugin.callRequests(plugin_name, function (result) {
+         parsePLTMessage(result, true, "CallRequest");
+      });
+   }
+}
+    , 1000); //1 second on the callback
 
 function muteHeadset (isMuted) {
-  if(!plantronicsSocket){
-	  return;
-  }
+  // if(!plantronicsSocket){
+	  // return;
+  // }
 
   if(isMuted) {
 	  console.log("muting headset");
-	  plantronicsSocket.send(JSON.stringify(COMMAND_MUTE_HEADSET));
+	  mute_function();
   } else{
     console.log("unmuting headset");
-    plantronicsSocket.send(JSON.stringify(COMMAND_UNMUTE_HEADSET));
+    unmute_function();
     }
 }
 
-function ringHeadset (startRinging, offer) {
-  if(!offer){
-   return;
-  }
+function mute_function() {
+    //tells Hub the softphone has muted
+    if (sfstate === "TACTIVE")
+        spokes.Plugin.muteCall(plugin_name, true, function (result) { 
+		if (result.isError)
+			 {
+				 console.log("Error in setting mute on headset");
+				 console.log(result.Err.Description);
+			 }
+		})
+    // else
+        // set_toggle_state(mutetoggle, false);
+}
+
+function unmute_function() {
+    //tells Hub the softphone has unmuted
+    if (sfstate === "TACTIVE")
+        spokes.Plugin.muteCall(plugin_name, false, function (result) {
+			if (result.isError)
+			 {
+				 console.log("Error in setting mute off headset");
+				 console.log(result.Err.Description);
+			 } })
+    // else
+        // set_toggle_state(mutetoggle, false);
+}
+
+function outgoingCallHeadset() {
+
+spokes.Plugin.outgoingCall(plugin_name, new SpokesCallId({ Id: "1" }), new SpokesContact({ Name: "test", Phone: "+1 613-302-4960" }), "ToHeadset", function (result) {
+            if(result.isError) {
+				console.log("Failed to inform the headset for outgoing call");
+}});
+}
+				
+function ringHeadset (startRinging, name) {
+  // if(!offer){
+   // return;
+  // }
   // if(startRinging){
 	  // console.log("ringing headset");
 	  // COMMAND_RING_HEADSET.payload.offer = offer;
@@ -96,7 +159,7 @@ function ringHeadset (startRinging, offer) {
         //create call ID and contact info for incoming call
 		console.log("ringing headset");
         currentCallID = new SpokesCallId({ Id: "1" });
-        name = offer.from;;
+        name = name;;
         male = false;
         //send incoming call information to Hub
         spokes.Plugin.incomingCall(plugin_name, currentCallID, new SpokesContact({ Name: name }), "Unknown", "ToHeadset", function (result) {
@@ -109,9 +172,9 @@ function ringHeadset (startRinging, offer) {
 	  }
 	  else
 	  {
-		  // Tell headset the incoming call is answered
+		  // Tell headset the incoming call is answered by softphone
 		  console.log("call answered");
-		  current = new SpokesCallId({ Id: "1" });
+		  currentCallID = new SpokesCallId({ Id: "1" });
 		  spokes.Plugin.answerCall(plugin_name, currentCallID, function (result) {
            if (result.isError)
 			 {
@@ -123,28 +186,7 @@ function ringHeadset (startRinging, offer) {
 }
 
 function connectToHeadset(onOpenFcn){
-////todo make this dyamic to adjust to SSL
-//	var uri = 'ws://localhost:8888/plantronics';
-//	plantronicsSocket = new WebSocket(uri);
-//	plantronicsSocket.onopen = function (evt) {
-//	    console.log("connected to Plantronics headset service");
-//	    if(onOpenFcn){
-//	    	    onOpenFcn();
-//	    }
-//	    queryHeadsetSettings();
-//	};
-//	plantronicsSocket.onclose = function (evt) {
-//	    console.log("Plantronics headset service connection closed");
-//	};
-//	plantronicsSocket.onmessage = function (evt) {
-//	    var pltMessage = JSON.parse(evt.data);
-//	    processPLTMessage(pltMessage);
-//	};
-//	plantronicsSocket.onerror = function (evt) {
-//	    console.log("error connecting to headset service");
-//	    plantronicsSocket = null;
-   //	};
-   //yes means you are registering, no means no
+
    var yes = true;
    if (yes) {
       spokes.Plugin.register(plugin_name, function (result) {
@@ -165,8 +207,8 @@ function connectToHeadset(onOpenFcn){
               // fillStatus(result, false, "Default Plugin")
                if (result.isError)
                   return;
-               //all is well, move to IDLE state
-//softphone_state(SessionCallState.CallIdle);
+			  //all is well, move to IDLE state
+			  ProcessEvents(SessionCallState.CallIdle);
             });
          });
       });
@@ -177,18 +219,19 @@ function connectToHeadset(onOpenFcn){
             alert("No Supported Device Connected.  Please attach a supported device and re-register");
             return;
          }
+         plantronicsHeadset = result.Result;
          //displayDeviceInfo(result);
       });
 
    }
 }
 
-function softphone_state(event) {
+function  ProcessEvents(event) {
     switch (event) {
-        // case INIT_STATE:
-            // sfstate = "TINIT";
-      // //      handleUIDisplay("init");
-            // break;
+         case INIT_STATE:
+             sfstate = "TINIT";
+       //      handleUIDisplay("init");
+             break;
         case SessionCallState.CallIdle:
             //put your call idle handler here
             sfstate = "TIDLE";
@@ -225,7 +268,11 @@ function softphone_state(event) {
         case SessionCallState.AcceptCall:
             //put your accept call handler here
             sfstate = "TACTIVE";
-          //  handleUIAudio("play");
+			if (user_WebPhone != null && user_WebPhone.isRinging()) {
+				console.log("Headset command fired to accept call");
+				user_WebPhone.Accept()
+			}
+ 	        //  handleUIAudio("play");
             break;
         case SessionCallState.HoldCall:
             //put your hold call handler here
@@ -241,15 +288,32 @@ function softphone_state(event) {
             break;
         case SessionCallState.MuteON:
             //put your mute handler here
+			console.log("command from headset Mute ON");
+			if (user_WebPhone != null && user_WebPhone.IsAudioMuted() === false) {
+				console.log("command from headset to Mute ON given to softphone");
+				$("#muteBtn").prop("title", jsloctab.WEBRTC_UNMUTE);
+				$("#muteImg").prop("src", "images/icon-resume.png");
+				user_WebPhone.Mute()
+			}			
       //      handleUIDisplay("mute");
             break;
         case SessionCallState.MuteOFF:
             //put your unmute handler here
+			console.log("command from headset Mute OFF");
+			if (user_WebPhone != null && user_WebPhone.IsAudioMuted() === true) {
+				console.log("command from headset to Mute OFF given to softphone");
+				$("#muteBtn").prop("title", jsloctab.WEBRTC_MUTE);
+				$("#muteImg").prop("src", "images/icon-hold.png");
+				user_WebPhone.UnMute()
+			}
     //        handleUIDisplay("unmute");
             break;
         case SessionCallState.TerminateCall:
             //put your terminate call handler here
             sfstate = "TIDLE";
+			if (user_WebPhone != null && user_WebPhone.isCallActive() == true) {
+				user_WebPhone.HangUp()
+				}
   //          handleUIAudio("stop");
             break;
         default:
@@ -257,6 +321,15 @@ function softphone_state(event) {
     }
     //update the UI state
 //    highlight(sfstate);
+}
+
+function clearCallFromHeadset() {
+    //tells Hub that the device has rejected the incoming call
+    spokes.Plugin.terminateCall(plugin_name, new SpokesCallId({ Id: "1" }), function (result) {
+        if(result.isError) {
+			console.log("Error in telling headset to clear call");
+		}
+    });
 }
 
 function getPlantronicsHeadset(){
@@ -278,53 +351,84 @@ function queryHeadsetOwner() {
   plantronicsSocket.send(JSON.stringify(SETTING_USERNAME));
 }
 
-function processPLTMessage(msg) {
-	//Process message from context server. If relevant to RTC server, call applicable methods.
-	var messageType = msg.type;
-	if ("setting" == messageType) {
-	    console.log("Plantronics device settings received");
-	    if(msg.id == SETTING_USERNAME.id) {
-              document.getElementById('username').value = msg.payload.username;
-	    }
-	    else if(msg.id == SETTING_DEVICE_INFO.id){
-	      plantronicsHeadset = msg.payload.device;
-	    }
-	} else if ("event" == messageType) {
-	    if (msg.id == EVENT_ACCEPT_CALL.id) {
-		      console.log("Plantronics headset has accepted the call");
-		      $("#incomingCall").modal("hide");
-		      //Assumes offer is being resent from the Headset service
-		      acceptCall(msg.payload.offer);
-	    } else if (msg.id == EVENT_CALL_TERMINATE.id) {
-		      console.log("Plantronics headset is no longer on the call");
-		      var params = {
-                          fromHeadset: true,
-                          remoteTerm : true
-                          };
-		      endCall(params);
-	    } else if(msg.id == EVENT_BUTTON_PRESS.id) {
-		      console.log("Plantronics headset button pressed" +  msg.payload.buttonName);
-	    } else if(msg.id == EVENT_WEAR_STATE_CHANGED.id){
-	    	      var status = "";
-	    	      if(msg.payload.worn == "true") {
-		        console.log("Plantronics headset worn");
-		        status = " - Available (Headset On)";
-		      } else {
-		        console.log("Plantronics headset not worn");
-		        status = " - Available (Headset Off)"
-		      }
-		      console.log("sending wearstate update");
-		      jQuery.post("wearstate", {wearstate: status, user: document.getElementById("user").innerHTML});
-
-	    } else if(msg.id ==  EVENT_PROXIMITY.id) {
-	    	  if(msg.payload.proximity == "near") {
-		        console.log("Plantronics headset is near");
-		      } else {
-		        console.log("Plantronics headset is far");
-		      }
-	    }
-	    else{
-	    	    console.log("Unknown event recieved: " + msg.id);
-	    }
-	}
+function parsePLTMessage(result, toJson, funcName) {
+   //This is a handler for command results
+   if (result.isError != null && result.isError) {
+     // displayError(result);
+   }
+   else if (toJson) { //the result of the command is an object and needs to be stringified
+      if (result.Result.length === 'undefined' || result.Result.length === null)
+         thelen = 0;
+      else thelen = result.Result.length;
+      if (thelen > 0) {
+         //display the event on UI
+         //displayJSON(result);
+         //send events to the event handler, parsing them by action
+         for (i = 0; i < thelen; i++) {
+            if (funcName === "CallEvents")
+               myresult = result.Result[i].Action;
+            else
+               if (funcName === "CallRequest") {
+                  myresult = CALL_REQUEST;
+                  male = false;
+                  dialNumber("Sally Request", result.Result[i].Phone)
+               }
+            ProcessEvents(myresult);//the event handler
+         }
+      }
+   }
+   else { //This is a command that returns a boolean
+      //displayCommandResult(funcName, result)
+   }
 }
+
+//function processPLTMessage(msg) {
+//	//Process message from context server. If relevant to RTC server, call applicable methods.
+//	var messageType = msg.type;
+//	if ("setting" == messageType) {
+//	    console.log("Plantronics device settings received");
+//	    if(msg.id == SETTING_USERNAME.id) {
+//              document.getElementById('username').value = msg.payload.username;
+//	    }
+//	    else if(msg.id == SETTING_DEVICE_INFO.id){
+//	      plantronicsHeadset = msg.payload.device;
+//	    }
+//	} else if ("event" == messageType) {
+//	    if (msg.id == EVENT_ACCEPT_CALL.id) {
+//		      console.log("Plantronics headset has accepted the call");
+//		      $("#incomingCall").modal("hide");
+//		      //Assumes offer is being resent from the Headset service
+//		      acceptCall(msg.payload.offer);
+//	    } else if (msg.id == EVENT_CALL_TERMINATE.id) {
+//		      console.log("Plantronics headset is no longer on the call");
+//		      var params = {
+//                          fromHeadset: true,
+//                          remoteTerm : true
+//                          };
+//		      endCall(params);
+//	    } else if(msg.id == EVENT_BUTTON_PRESS.id) {
+//		      console.log("Plantronics headset button pressed" +  msg.payload.buttonName);
+//	    } else if(msg.id == EVENT_WEAR_STATE_CHANGED.id){
+//	    	      var status = "";
+//	    	      if(msg.payload.worn == "true") {
+//		        console.log("Plantronics headset worn");
+//		        status = " - Available (Headset On)";
+//		      } else {
+//		        console.log("Plantronics headset not worn");
+//		        status = " - Available (Headset Off)"
+//		      }
+//		      console.log("sending wearstate update");
+//		      jQuery.post("wearstate", {wearstate: status, user: document.getElementById("user").innerHTML});
+
+//	    } else if(msg.id ==  EVENT_PROXIMITY.id) {
+//	    	  if(msg.payload.proximity == "near") {
+//		        console.log("Plantronics headset is near");
+//		      } else {
+//		        console.log("Plantronics headset is far");
+//		      }
+//	    }
+//	    else{
+//	    	    console.log("Unknown event recieved: " + msg.id);
+//	    }
+//	}
+//}
